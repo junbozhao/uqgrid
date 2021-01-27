@@ -14,7 +14,6 @@ class TestCase(unittest.TestCase):
 
     def test2bus(self):
 
-
         zfault = 1.0
 
         h = 1.0/120.0 # integration step in seconds
@@ -28,12 +27,7 @@ class TestCase(unittest.TestCase):
             GenGENROU(0, 1.575, 1.512, 0.291, 0.39, 0.1733,
             0.0787, 3.38, 0.0, 6.1, 1.0, 0.05, 0.15))
     
-        alpha = 0.0 #NO MOTOR
-
-        parameters = {'alpha': alpha, 
-            'h': h, 'nsteps': nsteps, 'pert': zfault}
-
-        tvec, history, history_u, history_v, history_m = integrate_system(parameters, psys, 
+        tvec, history, history_u, history_v, history_m = integrate_system(psys, 
                 comp_sens=False, tend=10.0)
 
         psse = np.loadtxt('data/2bus_GENROU.csv', delimiter=',')
@@ -70,12 +64,8 @@ class TestCase(unittest.TestCase):
         psys.add_busfault(1, zfault, 1.0)
     
         add_dyr(psys, "data/2bus_IEESGO.dyr")
-        alpha = 0.0 #NO MOTOR
 
-        parameters = {'alpha': alpha, 
-            'h': h, 'nsteps': nsteps, 'pert': zfault}
-
-        tvec, history, history_u, history_v, history_m = integrate_system(parameters, psys, 
+        tvec, history, history_u, history_v, history_m = integrate_system(psys, 
                 comp_sens=False, tend=10.0)
 
         psse = np.loadtxt('data/2bus_IEESGO.csv', delimiter=',')

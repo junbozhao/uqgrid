@@ -1109,8 +1109,7 @@ def preallocate_hessian(psys):
     return Hsparse
 
 
-def integrate_system(parameters,
-                     psys,
+def integrate_system(psys,
                      tend=10.0,
                      dt=(1.0/120.0),
                      steps=-1,
@@ -1122,7 +1121,6 @@ def integrate_system(parameters,
     """integrate power system dynamics
 
     Args:
-        parameters (null): null
         psys (powersystem): power system object
         tend (float, optional): integration end (seconds). Defaults to 10.0.
         dt (float, optional): time step. Defaults to (1.0/120.0).

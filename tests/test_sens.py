@@ -16,7 +16,7 @@ def simulate_system(load_weight=0.8, fault=0.8):
     psys.add_busfault(1, fault, 1.0)
     psys.loads[0].set_alpha(1.0)
     h = 1.0/120.0 # integration step in seconds
-    tvec, history, history_u, history_v = integrate_system(None, psys,
+    tvec, history, history_u, history_v = integrate_system(psys,
         verbose=False, comp_sens=True, tend = 4.0, dt=h, fsolve=False)
     
     return tvec, history, history_u, history_v
