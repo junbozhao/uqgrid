@@ -25,6 +25,7 @@ warnings.filterwarnings(action="ignore",
 # Test flags
 TEST_JACOBIAN = False
 VERIFY_HESSIAN = False
+SECONDORDER = False
 
 
 def gradient_p(psys, z, theta, load_idx=0):
@@ -846,7 +847,7 @@ def integrate(zold,
         # Integrate 1st order sensitivity equations
         first_sensitivity(psys, z, J, uold, theta, h)
 
-    if vold is not None:
+    if vold is not None and SECONDORDER:
         # Integrate 2nd order sensitivity equations
         residual_hessian(Hess, z, theta, psys)
         second_sensitivity(psys, z, uold, J, Hess, vold, theta, h)
