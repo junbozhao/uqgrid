@@ -1,4 +1,4 @@
-# Sample script: runs IEEE 9 bus sytem and obtains sensitivities w.r.t load composition.
+
 
 import sys
 sys.path.append("..")
@@ -41,17 +41,19 @@ bus_idx = psys.genspeed_idx_set()
 bus = bus_idx[0]
 
 #Monte Carlo Integration Setup
-N=5
+N=10
 p1_range=[0,1]
 p2_range=[0,1]
 p3_range=[0,1]
 disp_iter= True
 
-Mega_history_u=np.zeros((history_u.shape[0],history_u.shape[1],history_u.shape[2],N))
-Mega_history_u2=np.zeros((history_u.shape[0],history_u.shape[1],history_u.shape[2],N))
+
+DGSM_v=np.zeros((history_u.shape[0],history_u.shape[1],history_u.shape[2]))
+DGSM_w=np.zeros((history_u.shape[0],history_u.shape[1],history_u.shape[2]))
 
 plt.figure(0)
-plt.title('Trajectory of bus 1')
+title = "Trajectory at bus %d" % (bus)
+plt.title(title)
 # plot sensitivities \frac{d\omega}{d \alpha_i} for \alpha = 1, 2, 3.
 for i in range(len(pnom)):
     title = "Sensitivity of $\omega$ w.r.t parameter %d." % (i + 1)
@@ -75,12 +77,13 @@ for j in range(N):
         plt.figure(i+1)
         plt.plot(tvec, history_u[bus,i, :])
     
-    Mega_history_u[:,:,:,i]=np.copy(history_u)
-    Mega_history_u2[:,:,:,i]=np.square(np.copy(history_u))
+
+    
+    DGSM_v+=np.copy(history_u)/N
+    DGSM_w+=np.square(np.copy(history_u))/N
     if disp_iter: print("%.2f%% done" % (100.0*(j+1)/N))
     
-DGSM_v=np.mean(Mega_history_u2, axis =-1)
-DGSM_w=np.mean(Mega_history_u, axis =-1)
+
     
 for i in range(len(pnom)):
     title = "DGSM v of $\omega$ w.r.t parameter %d." % (i + 1)
@@ -95,4 +98,11 @@ for i in range(len(pnom)):
     plt.plot(tvec, DGSM_w[bus,i, :])   
     
     
-    
+for bus in bus_idx:
+    plt.figure()
+    title = "bus %i" % (bus)
+    plt.figure()
+    plt.title(title)
+    for i in range(len(pnom)):
+        plt.plot(tvec, DGSM_v[bus,i, :])
+    plt.legend(('param 1','param 2','param 3'))
