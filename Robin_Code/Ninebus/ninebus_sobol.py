@@ -14,7 +14,7 @@ def compute_QoI(psys,params):
     return QoI
 
 import sys
-sys.path.append("..")
+sys.path.append("../..")
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,10 +29,10 @@ zfault = 0.2 # perturbation fault
 dt = 1.0/(120.0) # integration step in seconds
 
 # load static file
-psys = load_psse(raw_filename="../data/ieee9_v33.raw")
+psys = load_psse(raw_filename="../../data/ieee9_v33.raw")
 
 # add dynamics
-add_dyr(psys, "../data/ieee9bus.dyr")
+add_dyr(psys, "../../data/ieee9bus.dyr")
 
 # add fault and create initial data structures
 psys.add_busfault(7, zfault, 1.0)
@@ -100,4 +100,6 @@ for i in range(3):
 
 print(S)
 print(ST)
+
+
     

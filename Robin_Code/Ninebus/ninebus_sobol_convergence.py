@@ -60,7 +60,7 @@ def Sobol_All(N,psys,fcount):
         S[i]=numS/denom
         ST[i]=1-(numST/denom)
     
-    return ST[1], fcount
+    return ST[0], fcount
 
 def Sobol_One(N,psys,fcount):
     p1_range=[0,1]
@@ -110,13 +110,13 @@ def Sobol_One(N,psys,fcount):
         S[i]=numS/denom
         ST[i]=1-(numST/denom)
     
-    return ST[1], fcount
+    return ST[0], fcount
 
 
 if __name__ == "__main__":
 
     import sys
-    sys.path.append("..")
+    sys.path.append("../..")
 
     import numpy as np
     import matplotlib.pyplot as plt
@@ -132,16 +132,17 @@ if __name__ == "__main__":
     import math
     from joblib import Parallel, delayed
     import multiprocessing
+    from os import path
 
     # runtime parameters
     zfault = 0.2 # perturbation fault
     dt = 1.0/(120.0) # integration step in seconds
 
     # load static file
-    psys = load_psse(raw_filename="../data/ieee9_v33.raw")
+    psys = load_psse(raw_filename="../../data/ieee9_v33.raw")
 
     # add dynamics
-    add_dyr(psys, "../data/ieee9bus.dyr")
+    add_dyr(psys, "../../data/ieee9bus.dyr")
 
     # add fault and create initial data structures
     psys.add_busfault(7, zfault, 1.0)
@@ -165,49 +166,53 @@ if __name__ == "__main__":
     # select variable $\omega$ index
     bus = bus_idx[0]    
     
-    #N_list=[2**x for x in range(8,10)]
-    N_list=[]
-    K=5
+    N_list=[2**x for x in range(0,8)]
+    #N_list=[]
+    K=50
+    name='Sobol_one_convergence_results_k50'
+    file='./results/'+name+'.csv'
     Sobol_error=np.zeros(len(N_list))
     Sobol_fcount=np.zeros(len(N_list))
     num_cores = multiprocessing.cpu_count()-1
+    print('Num cores: %i' % (num_cores))
     for i in range (len(N_list)):
         start_time = time.time()
         N=N_list[i]
         temp_fcount=0
         print("Starting N=%i at %s" % (N,time.strftime("%H:%M:%S", time.localtime())))
-        true_Sobol, _ = Sobol_All(2*N,psys,0)
+        true_Sobol, _ = Sobol_One(2*N,psys,0)
         Sobol_error[i]=0
         
-        results=Parallel(n_jobs=num_cores)(delayed(Sobol_All)(N,psys,0) for j in range(K))
+        results=Parallel(n_jobs=num_cores)(delayed(Sobol_One)(N,psys,0) for j in range(K))
         for j in range(K):
             temp_error, temp_fcount = results[j]
             Sobol_error[i] += abs((temp_error-true_Sobol)/true_Sobol)/K
         Sobol_fcount[i]=temp_fcount
         end_time = time.time()
         print('Time taken for this N value: %s ' % (str(datetime.timedelta(seconds=round(end_time-start_time)))))
+    
+    if path.exists(file):    
+        data=pd.read_csv(file, usecols = [0],names=['name'])
+        df = pd.DataFrame(data)
+        big_N_list = df.values.flatten()
+        data=pd.read_csv(file, usecols = [1],names=['name'])
+        df = pd.DataFrame(data)
+        big_Sobol_error_list = df.values.flatten()
+        data=pd.read_csv(file, usecols = [2],names=['name'])
+        df = pd.DataFrame(data)
+        big_Sobol_fcount = df.values.flatten()
         
-    data=pd.read_csv('./Sobol_convergence_results.csv', usecols = [0],names=['name'])
-    df = pd.DataFrame(data)
-    big_N_list = df.values.flatten()
-    data=pd.read_csv('./Sobol_convergence_results.csv', usecols = [1],names=['name'])
-    df = pd.DataFrame(data)
-    big_Sobol_error_list = df.values.flatten()
-    data=pd.read_csv('./Sobol_convergence_results.csv', usecols = [2],names=['name'])
-    df = pd.DataFrame(data)
-    big_Sobol_fcount = df.values.flatten()
-    
-    N_list=np.append(big_N_list,N_list)
-    Sobol_error=np.append(big_Sobol_error_list,Sobol_error)
-    Sobol_fcount=np.append(big_Sobol_fcount,Sobol_fcount)
-    
-    z=np.argsort(N_list)
-    N_list=N_list[z]
-    Sobol_error=Sobol_error[z]
-    Sobol_fcount=Sobol_fcount[z]
+        N_list=np.append(big_N_list,N_list)
+        Sobol_error=np.append(big_Sobol_error_list,Sobol_error)
+        Sobol_fcount=np.append(big_Sobol_fcount,Sobol_fcount)
+        
+        z=np.argsort(N_list)
+        N_list=N_list[z]
+        Sobol_error=Sobol_error[z]
+        Sobol_fcount=Sobol_fcount[z]
     
     
-    with open('./Sobol_convergence_results.csv', 'w') as csv_file:
+    with open(file, 'w') as csv_file:
         csv_writer = csv.writer(csv_file, delimiter=',')
         for i in range (len(N_list)):
             csv_writer.writerow([N_list[i], Sobol_error[i],Sobol_fcount[i]])
@@ -215,12 +220,6 @@ if __name__ == "__main__":
     trend=np.zeros(len(N_list))
     for i in range (len(N_list)):
         trend[i]=1/math.sqrt(N_list[i])
-        
-    logy=np.log(Sobol_error)
-    logx=np.log(trend)
-    coeffs=np.polyfit(logx,logy,deg=1)
-    poly=np.poly1d(coeffs)
-    yfit= lambda trend: np.exp(poly(np.log(trend)))
     
     fig, ax1 = plt.subplots()
     color = 'tab:red'
@@ -228,9 +227,11 @@ if __name__ == "__main__":
     ax1.set_xlabel('Samples (N)')
     ax1.set_ylabel('Relative Error', color=color)
     ax1.loglog(N_list,Sobol_error, color=color)
-    ax1.plot(N_list,yfit(trend), 'r:')
+    ax1.plot(N_list,trend, 'r:')
     ax1.tick_params(axis='y', labelcolor=color)
     
+    file='./figures/'+name+'.pdf'
+    plt.savefig(file)
     #ax2 = ax1.twinx()
     #color = 'tab:blue'
     #ax2.set_ylabel('Function Evaluations', color=color)
