@@ -14,7 +14,7 @@ def compute_QoI(psys,params):
     return QoI
 
 import sys
-sys.path.append("..")
+sys.path.append("../..")
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -23,16 +23,22 @@ from uqgrid.uqgrid import integrate_system
 from uqgrid.parse import load_psse, add_dyr
 from uqgrid.pflow import runpf
 import random
+import csv
+import pandas as pd
+import time
+import datetime
+from joblib import Parallel, delayed
+import multiprocessing
 
 # runtime parameters
 zfault = 0.2 # perturbation fault
 dt = 1.0/(120.0) # integration step in seconds
 
 # load static file
-psys = load_psse(raw_filename="../data/ieee9_v33.raw")
+psys = load_psse(raw_filename="../../data/ieee9_v33.raw")
 
 # add dynamics
-add_dyr(psys, "../data/ieee9bus.dyr")
+add_dyr(psys, "../../data/ieee9bus.dyr")
 
 # add fault and create initial data structures
 psys.add_busfault(7, zfault, 1.0)
@@ -53,11 +59,15 @@ bus_idx = psys.genspeed_idx_set()
 # select variable $\omega$ index
 bus = bus_idx[0]
 
-N=100
+N=int(1e5)
 p1_range=[0,1]
 p2_range=[0,1]
 p3_range=[0,1]
 
+num_cores = multiprocessing.cpu_count()-1
+print('Num Cores: %i' % num_cores)
+print('N= %i' % N)
+start_time=time.time()
 A=np.zeros([N,3])
 B=np.zeros([N,3])
 C=np.zeros([3,N,3])
@@ -80,12 +90,23 @@ for i in range(3):
 
 yA=np.zeros(N)
 yB=np.zeros(N)
-yC=np.zeros([3,N])            
+yC=np.zeros([3,N])    
+
+results=Parallel(n_jobs=num_cores)(delayed(compute_QoI)(psys,A[i,:]) for i in range(N))
 for i in range(N):
-    yA[i]=compute_QoI(psys,A[i,:])
-    yB[i]=compute_QoI(psys,B[i,:])
-    for j in range(3):
-        yC[j,i]=compute_QoI(psys,C[j,i,:])
+    yA[i]=results[i]
+print('yA made')
+        
+results=Parallel(n_jobs=num_cores)(delayed(compute_QoI)(psys,B[i,:]) for i in range(N))
+for i in range(N):
+    yB[i]=results[i]
+print('yB made')
+        
+for j in range(3):
+    results=Parallel(n_jobs=num_cores)(delayed(compute_QoI)(psys,C[j,i,:]) for i in range(N))
+    for i in range(N):
+        yC[j,i]=results[i]
+    print('yC, %i made' % j)
         
 f02=(N**-2)*np.sum(yA)*np.sum(yB)
 
@@ -98,6 +119,10 @@ for i in range(3):
     S[i]=numS/denom
     ST[i]=1-(numST/denom)
 
-print(S)
-print(ST)
+end_time = time.time()
+print('Time taken: %s ' % (str(datetime.timedelta(seconds=round(end_time-start_time)))))
     
+with open('./results/ninebus_Sobol_true.csv', 'w') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=',')
+            csv_writer.writerow([N])
+            csv_writer.writerow([ST[0]])
