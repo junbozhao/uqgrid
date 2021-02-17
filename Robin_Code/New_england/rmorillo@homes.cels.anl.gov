@@ -3,8 +3,8 @@ def DGSM(N,psys, history_u,fcount):
     for j in range(N):
         while True:
                 try:
-                    pmax = np.ones(psys.nloads) * 0.75
-                    pmin = np.ones(psys.nloads) * 0.25
+                    pmax = np.ones(psys.nloads)
+                    pmin = np.zeros(psys.nloads)
                     p_sample=np.zeros(psys.nloads)
                     for p in range(len(pnom)):
                         p_sample[p]=random.uniform(pmin[p],pmax[p])
@@ -93,14 +93,14 @@ if __name__ == "__main__":
     # select variable $\omega$ index
     bus = bus_idx[0]
     
-    data=pd.read_csv(str('./results/new_england_DGSM_true.csv'), usecols = [0],names=['name'])
+    data=pd.read_csv(str('./results/New_england_DGSM_true.csv'), usecols = [0],names=['name'])
     df = pd.DataFrame(data)
     x= df.values.flatten()
     true_DGSM=x[1]
-    #N_list=[2**x for x in range(3,6)]
-    N_list=[]
-    K=1
-    name='DGSM_convergence_results_k1'
+    N_list=[2**x for x in range(0,6)]
+    #N_list=[]
+    K=50
+    name='DGSM_convergence_results_k50'
     file='./results/'+name+'.csv'
     DGSM_error=np.zeros(len(N_list))
     DGSM_fcount=np.zeros(len(N_list))

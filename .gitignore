@@ -5,3 +5,9 @@
 *.pyc
 *.pyc
 uqgrid/__pycache__/__init__.cpython-38.pyc
+*.nbc
+*.nbc
+*.nbc
+*.nbi
+*.nbc
+uqgrid/__pycache__/uqgrid.power_flow_jacobian-182.py38.nbi
