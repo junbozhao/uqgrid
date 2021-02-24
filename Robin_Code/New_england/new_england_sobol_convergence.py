@@ -100,7 +100,7 @@ x= df.values.flatten()
 true_Sobol=x[1]
 
 
-N_list=[2**x for x in range(3,4)]
+N_list=[2**x for x in range(6,7)]
 #N_list=[]
 K=1
 name='Sobol_one_convergence_results_k1'

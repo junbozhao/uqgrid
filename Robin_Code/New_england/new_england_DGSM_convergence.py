@@ -33,7 +33,9 @@ def DGSM(N,psys, history_u,fcount):
 
 
 
-
+def fit_func(x, a):
+    
+    return a/np.sqrt(x)
 
 
 
@@ -58,6 +60,7 @@ if __name__ == "__main__":
     import multiprocessing
     from os import path
     import math
+    from scipy.optimize import curve_fit
     
     # runtime parameters
     zfault = 0.03 # perturbation fault
@@ -100,7 +103,7 @@ if __name__ == "__main__":
     #N_list=[2**x for x in range(3,6)]
     N_list=[]
     K=1
-    name='DGSM_convergence_results_k1'
+    name='DGSM_convergence_results_k50'
     file='./results/'+name+'.csv'
     DGSM_error=np.zeros(len(N_list))
     DGSM_fcount=np.zeros(len(N_list))
@@ -151,10 +154,15 @@ if __name__ == "__main__":
             
     trend=np.zeros(len(N_list))
     trend2=np.zeros(len(N_list))
+    trend3=np.zeros(len(N_list))
     for i in range (len(N_list)):
         trend[i]=1/math.sqrt(N_list[i])
         trend2[i]=DGSM_error[0]/math.sqrt(N_list[i])
-    
+    params = curve_fit(fit_func, N_list, DGSM_error)
+    [a] = params[0]
+    x_fit = np.linspace(N_list[0], N_list[-1], 100)
+    for i in range (len(N_list)):
+        trend3[i] = a/math.sqrt(N_list[i])
     
     fig, ax1 = plt.subplots()
     color = 'k'
@@ -162,7 +170,7 @@ if __name__ == "__main__":
     ax1.set_xlabel('Samples (N)')
     ax1.set_ylabel('Relative Error', color=color)
     ax1.loglog(N_list,DGSM_error, color=color)
-    ax1.plot(N_list,trend2, 'r:')
+    ax1.plot(N_list,trend3, 'r:')
     ax1.tick_params(axis='y', labelcolor=color)
     
     file='./figures/'+name+'.pdf'

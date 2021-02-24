@@ -75,7 +75,7 @@ bus_idx = psys.genspeed_idx_set()
 bus = bus_idx[0]
 
 #Monte Carlo Integration Setup
-N=int(100)
+N=int(2)
 disp_iter= True
 
 DGSM_v=np.zeros((history_u.shape[0],history_u.shape[1],history_u.shape[2]))

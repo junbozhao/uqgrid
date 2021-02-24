@@ -112,6 +112,9 @@ def Sobol_One(N,psys,fcount):
     
     return ST[0], fcount
 
+def fit_func(x, a):
+    
+    return a/np.sqrt(x)
 
 if __name__ == "__main__":
 
@@ -133,6 +136,7 @@ if __name__ == "__main__":
     from joblib import Parallel, delayed
     import multiprocessing
     from os import path
+    from scipy.optimize import curve_fit
 
     # runtime parameters
     zfault = 0.2 # perturbation fault
@@ -172,8 +176,8 @@ if __name__ == "__main__":
     true_Sobol=x[1]
     
     
-    N_list=[2**x for x in range(0,0)]
-    #N_list=[]
+    #N_list=[2**x for x in range(0,0)]
+    N_list=[]
     K=50
     name='Sobol_one_convergence_results_k50'
     file='./results/'+name+'.csv'
@@ -225,9 +229,15 @@ if __name__ == "__main__":
     
     trend=np.zeros(len(N_list))
     trend2=np.zeros(len(N_list))
+    trend3=np.zeros(len(N_list))
     for i in range (len(N_list)):
         trend[i]=1/math.sqrt(N_list[i])
         trend2[i]=Sobol_error[0]/math.sqrt(N_list[i])
+    params = curve_fit(fit_func, N_list, Sobol_error)
+    [a] = params[0]
+    x_fit = np.linspace(N_list[0], N_list[-1], 100)
+    for i in range (len(N_list)):
+        trend3[i] = a/math.sqrt(N_list[i])
     
     fig, ax1 = plt.subplots()
     color = 'k'
@@ -235,7 +245,7 @@ if __name__ == "__main__":
     ax1.set_xlabel('Samples (N)')
     ax1.set_ylabel('Relative Error', color=color)
     ax1.loglog(N_list,Sobol_error, color=color)
-    ax1.plot(N_list,trend2, 'r:')
+    ax1.plot(N_list,trend3, 'r:')
     ax1.tick_params(axis='y', labelcolor=color)
     
     file='./figures/'+name+'.pdf'
