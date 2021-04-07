@@ -25,7 +25,7 @@ warnings.filterwarnings(action="ignore",
 # Test flags
 TEST_JACOBIAN = False
 VERIFY_HESSIAN = False
-SECONDORDER = False
+SECONDORDER = True
 
 
 def gradient_p(psys, z, theta, load_idx=0):
