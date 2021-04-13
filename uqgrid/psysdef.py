@@ -841,20 +841,6 @@ class GenGENROU(DynamicGenerator):
         return F
 
     def initialize(self, vm, va, p, q, x, y, psys):
-        
-        # STATE VARUABKES
-        #e_qp = x[0]
-        #e_dp = x[1]
-        #phi_1d = x[2]
-        #phi_2q = x[3]
-        #w = x[4]
-        #delta = x[5]
-        #v_q = x[6]
-        #v_d = x[7]
-        #i_q = x[8]
-        #i_d = x[9]
-        #e_fd = x[10]
-        #p_m = x[11]
 
         # parameters
         x_d = self.x_d
