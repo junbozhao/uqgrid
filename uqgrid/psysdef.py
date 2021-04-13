@@ -841,8 +841,73 @@ class GenGENROU(DynamicGenerator):
         return F
 
     def initialize(self, vm, va, p, q, x, y, psys):
+        
+        # STATE VARUABKES
+        #e_qp = x[0]
+        #e_dp = x[1]
+        #phi_1d = x[2]
+        #phi_2q = x[3]
+        #w = x[4]
+        #delta = x[5]
+        #v_q = x[6]
+        #v_d = x[7]
+        #i_q = x[8]
+        #i_d = x[9]
+        #e_fd = x[10]
+        #p_m = x[11]
+
+        # parameters
+        x_d = self.x_d
+        x_q = self.x_q
+        x_dp = self.x_dp
+        x_qp = self.x_qp
+        x_ddp = self.x_ddp
+        x_qdp = self.x_ddp
+        xl = self.xl
+        H = self.H
+        D = self.D
+        T_d0p = self.T_d0p
+        T_q0p = self.T_q0p
+        T_d0dp = self.T_d0dp
+        T_q0dp = self.T_q0dp
+        ratio = self.ratio
 
         x0 = np.ones(self.initdim)
+        vt  = vm*np.cos(va) + 1j*vm*np.sin(va)
+        ig = (p - 1j*q)/np.conjugate(vt)
+        delta = np.angle(vt + (1j*x_q)*ig)
+
+        v_d = vm*np.sin(delta - va)
+        v_q = vm*np.cos(delta - va)
+        i_d = (p*v_d + q*v_q)/(v_d**2 + v_q**2)
+        i_q = (p*v_q - q*v_d)/(v_d**2 + v_q**2)
+
+        phi_d = v_q
+        phi_q = -v_d
+    
+        e_dp = (-x_qp)*i_q - phi_q
+        e_qp = x_dp*i_d + phi_d
+
+        phi_1d =  e_qp - (x_dp - xl)*i_d
+        phi_2q =  -e_dp - (x_qp - xl)*i_q
+    
+        e_fd = e_qp + (x_d - x_dp)*i_d
+        p_m = p
+
+        x0[0] = e_qp
+        x0[1] = e_dp
+        x0[2] = phi_1d
+        x0[3] = phi_2q
+        x0[4] = 0.0
+        x0[5] = delta
+        x0[6] = v_q
+        x0[7] = v_d
+        x0[8] = i_q
+        x0[9] = i_d
+        x0[10] = e_fd
+        x0[11] = p_m
+
+        # REFINEMENT
         sol = optimize.root(
             self.residualFinit,
             x0,
