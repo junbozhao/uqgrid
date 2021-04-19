@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import numpy as np
+import sys
 from scipy import optimize
 import numdifftools as nd
 from numpy import linalg as LA
@@ -11,6 +12,16 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import spsolve
 import scipy as sp
 import math
+
+# optional include: PETSC4py
+try:
+    import petsc4py
+except:
+    petsc4py = None
+    print("Warning: using uqgrid without PETSc4py. \
+            Some functionality will not be available")
+if petsc4py:
+    from petsc4py import PETSc
 
 #from psysdef import Psystem
 from .psysdef import Psystem, GenGENROU, ExcESDC1A, GovIEESGO, MotCIM5
@@ -1163,6 +1174,23 @@ def integrate_system(psys,
     nparam = psys.nloads # For now, we only suport sensitivities of loads
     nmixed = int((nparam**2 - nparam)/2)
 
+    if petsc4py:
+        print("Convert objects to PETSc format")
+        nsize = J.shape[0]
+        Jp = PETSc.Mat()
+        Jp.create(PETSc.COMM_WORLD)
+        Jp.setSizes([nsize, nsize])
+        Jp.setType('seqaij') # sparse
+        csr = [J.indptr, J.indices, J.data]
+        Jp.setPreallocationCSR(csr)
+        Jp.assemblyBegin()
+        Jp.assemblyEnd()
+
+        z0p = PETSc.Vec()
+        z0p.createSeq(nsize)
+        z0p.setArray(z0)
+        z0p.assemblyBegin()
+        z0p.assemblyEnd()
 
     # sensitivity variables
     if comp_sens:
