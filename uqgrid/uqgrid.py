@@ -21,6 +21,7 @@ except:
     print("Warning: using uqgrid without PETSc4py. \
             Some functionality will not be available")
 if petsc4py:
+    petsc4py.init(sys.argv)
     from petsc4py import PETSc
 
 #from psysdef import Psystem
@@ -1120,6 +1121,32 @@ def preallocate_hessian(psys):
 
     return Hsparse
 
+if petsc4py:
+    class DAE_petsc(object):
+        n = 1
+        comm = PETSc.COMM_SELF
+        def __init__(self, psys, theta):
+            self.psys = psys
+            self.theta = theta
+        
+        def evalFunction(self, ts, t, x, xdot, f):
+            
+            start, end = x.getOwnershipRange()
+            NDIFFEQ = self.psys.num_dof_dif
+            xx = np.array([x[i] for i in range(start, end)])
+            ff = np.zeros_like(xx)
+            residual_function(ff, xx, self.theta, self.psys)
+            f.setArray(-ff)
+            f[:NDIFFEQ] += xdot[:NDIFFEQ]
+            f.assemble()
+        
+        def evalJacobian(self, ts, t, x, xdot, a, A, B):
+            J = B
+            l = self.lambda_
+            J[0,0] = a + l
+            J.assemble()
+            if A != B: A.assemble()
+            return True # same nonzero pattern
 
 def integrate_system(psys,
                      tend=10.0,
@@ -1151,6 +1178,8 @@ def integrate_system(psys,
     volt, Pinj = runpf(psys, verbose=False)
     z0, theta = initialize_system(volt, Pinj, psys)
     system_size = z0.shape[0]
+
+    z0[4] = 0.01
 
     J = preallocate_jacobian(psys)
     F = np.zeros(system_size)
@@ -1191,6 +1220,36 @@ def integrate_system(psys,
         z0p.setArray(z0)
         z0p.assemblyBegin()
         z0p.assemblyEnd()
+
+        fp = z0p.duplicate()
+
+        # Create integration object
+        dae = DAE_petsc(psys, theta)
+
+        ts = PETSc.TS().create(comm=PETSc.COMM_WORLD)
+        ts.setProblemType(ts.ProblemType.NONLINEAR)
+        ts.setType(ts.Type.THETA)
+
+        ts.setIFunction(dae.evalFunction, fp)
+
+        historyp = []
+        tvecp = []
+        def monitor(ts, i, t, x):
+            xx = x[:].tolist()
+            historyp.append(xx)
+            tvecp.append(t)
+        ts.setMonitor(monitor)
+
+        ts.setTime(0.0)
+        ts.setTimeStep(dt)
+        ts.setMaxTime(tend)
+        ts.setExactFinalTime(PETSc.TS.ExactFinalTime.INTERPOLATE)
+
+        ts.setFromOptions()
+        ts.solve(z0p)
+
+        historyp = np.transpose(np.array(historyp))
+        tvecp = np.array(tvecp)
 
     # sensitivity variables
     if comp_sens:
@@ -1270,5 +1329,15 @@ def integrate_system(psys,
     # if tend < toff we remove fault before exiting
     if i < step_off:
         psys.fault_events[0].remove()
+
+    
+    import matplotlib.pyplot as plt
+    bus_idx = psys.genspeed_idx_set()
+    for bus in bus_idx:
+        label = "generator at bus %d" % (bus)
+        plt.plot(tvec, history[bus,:], label="uqgrid")
+        plt.plot(tvecp, historyp[bus,:], label="petsc4py")
+    plt.legend()
+    plt.show()
 
     return tvec, history, history_u, history_v, history_m
