@@ -1130,7 +1130,6 @@ if petsc4py:
             self.theta = theta
         
         def evalFunction(self, ts, t, x, xdot, f):
-            
             start, end = x.getOwnershipRange()
             NDIFFEQ = self.psys.num_dof_dif
             xx = np.array([x[i] for i in range(start, end)])
@@ -1147,6 +1146,23 @@ if petsc4py:
             J.assemble()
             if A != B: A.assemble()
             return True # same nonzero pattern
+    
+    class ALG_petsc(object):
+        n = 1
+        comm = PETSc.COMM_SELF
+        def __init__(self, psys, theta):
+            self.psys = psys
+            self.theta = theta
+        
+        def evalFunction(self, snes, x, f):
+            start, end = x.getOwnershipRange()
+            NDIFFEQ = self.psys.num_dof_dif
+            xx = np.array([x[i] for i in range(start, end)])
+            ff = np.zeros_like(xx)
+            residual_function(ff, xx, self.theta, self.psys)
+            ff[:NDIFFEQ] = 0.0
+            f.setArray(-ff)
+            f.assemble()
 
 def integrate_system(psys,
                      tend=10.0,
@@ -1178,8 +1194,6 @@ def integrate_system(psys,
     volt, Pinj = runpf(psys, verbose=False)
     z0, theta = initialize_system(volt, Pinj, psys)
     system_size = z0.shape[0]
-
-    z0[4] = 0.01
 
     J = preallocate_jacobian(psys)
     F = np.zeros(system_size)
@@ -1229,7 +1243,6 @@ def integrate_system(psys,
         ts = PETSc.TS().create(comm=PETSc.COMM_WORLD)
         ts.setProblemType(ts.ProblemType.NONLINEAR)
         ts.setType(ts.Type.THETA)
-
         ts.setIFunction(dae.evalFunction, fp)
 
         historyp = []
@@ -1239,15 +1252,40 @@ def integrate_system(psys,
             historyp.append(xx)
             tvecp.append(t)
         ts.setMonitor(monitor)
-
+        
         ts.setTime(0.0)
         ts.setTimeStep(dt)
-        ts.setMaxTime(tend)
+        ts.setMaxTime(ton)
         ts.setExactFinalTime(PETSc.TS.ExactFinalTime.INTERPOLATE)
-
         ts.setFromOptions()
         ts.solve(z0p)
 
+        # fault application
+        psys.fault_events[0].apply()
+        alg = ALG_petsc(psys, theta)
+        fsp = z0p.duplicate()
+        snes = PETSc.SNES()
+        snes.create(PETSc.COMM_WORLD)
+        snes.setFunction(alg.evalFunction, fsp)
+        snes.setOptionsPrefix("alg_")
+        snes.setFromOptions()
+        snes.solve(None, z0p)
+
+        # disturbance time
+        ts.setTime(ton)
+        ts.setMaxTime(toff)
+        ts.solve(z0p)
+
+        # fault removal
+        psys.fault_events[0].remove()
+        snes.solve(None, z0p)
+
+        # post disturbance time
+        ts.setTime(toff)
+        ts.setMaxTime(tend)
+        ts.solve(z0p)
+
+        # Cast history to numpy arrays
         historyp = np.transpose(np.array(historyp))
         tvecp = np.array(tvecp)
 
