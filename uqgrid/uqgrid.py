@@ -723,6 +723,20 @@ def jacobian_beuler(J, NDIFFEQ, h):
         col[0] = i
         csr_add_row(J.data, J.indptr, J.indices, 1, i, col, data)
 
+def jacobian_implicit(J, NDIFFEQ, a):
+    # Converts the Jacobian of the r.h.s into:
+    # J = [a*I-df_dx, -df_dy
+    #     dg_dx, dg_dy]
+
+    for i in range(J.shape[0]):
+        csr_mult_row(J.data, J.indptr, J.indices, i, -1)
+    
+    col = np.array([0])
+    data = np.array([a])
+    for i in range(NDIFFEQ):
+        col[0] = i
+        csr_add_row(J.data, J.indptr, J.indices, 1, i, col, data)
+
 
 def function_beuler_wrapper(z, zold, h, psys, theta):
     NDIFFEQ = psys.num_dof_dif
@@ -975,7 +989,7 @@ def preallocate_jacobian(psys):
     # mix the structure of the Jacobian matrix of the r.h.s and the Jacobian of the
     # BEULER problem. Performance-wise, I will go with mixing for now.
 
-    for i in range(dif_size):
+    for i in range(sys_size):
         list_coordinates[i].extend([i])
 
     # network equations
@@ -1125,9 +1139,10 @@ if petsc4py:
     class DAE_petsc(object):
         n = 1
         comm = PETSc.COMM_SELF
-        def __init__(self, psys, theta):
+        def __init__(self, psys, theta, J):
             self.psys = psys
             self.theta = theta
+            self.J = J
         
         def evalFunction(self, ts, t, x, xdot, f):
             start, end = x.getOwnershipRange()
@@ -1139,20 +1154,24 @@ if petsc4py:
             f[:NDIFFEQ] += xdot[:NDIFFEQ]
             f.assemble()
         
-        def evalJacobian(self, ts, t, x, xdot, a, A, B):
-            J = B
-            l = self.lambda_
-            J[0,0] = a + l
-            J.assemble()
-            if A != B: A.assemble()
+        def evalJacobian(self, ts, t, x, xdot, a, J, P):
+            start, end = x.getOwnershipRange()
+            NDIFFEQ = self.psys.num_dof_dif
+            xx = np.array([x[i] for i in range(start, end)])
+            residual_jacobian(self.J, xx, self.theta, self.psys)
+            jacobian_implicit(self.J, NDIFFEQ, a)
+            P.setValuesCSR(self.J.indptr, self.J.indices, self.J.data)
+            P.assemble()
+            if J != P: J.assemble()
             return True # same nonzero pattern
-    
+
     class ALG_petsc(object):
         n = 1
         comm = PETSc.COMM_SELF
-        def __init__(self, psys, theta):
+        def __init__(self, psys, theta, J):
             self.psys = psys
             self.theta = theta
+            self.J = J
         
         def evalFunction(self, snes, x, f):
             start, end = x.getOwnershipRange()
@@ -1163,6 +1182,21 @@ if petsc4py:
             ff[:NDIFFEQ] = 0.0
             f.setArray(-ff)
             f.assemble()
+
+        def evalJacobian(self, snes, x, J, P):
+            start, end = x.getOwnershipRange()
+            NDIFFEQ = self.psys.num_dof_dif
+            xx = np.array([x[i] for i in range(start, end)])
+            residual_jacobian(self.J, xx, self.theta, self.psys)
+            # The following has the effect of setting the differential part of the
+            # jacobian to 0 and adding 1 to the diagonal hence keeping the differential
+            # part constant (projection to manifold)
+            jacobian_beuler(self.J, NDIFFEQ, 0.0)
+            P.setValuesCSR(self.J.indptr, self.J.indices, -self.J.data)
+            P.assemble()
+
+            if J != P: J.assemble()
+            return True
 
 def integrate_system(psys,
                      tend=10.0,
@@ -1238,12 +1272,13 @@ def integrate_system(psys,
         fp = z0p.duplicate()
 
         # Create integration object
-        dae = DAE_petsc(psys, theta)
+        dae = DAE_petsc(psys, theta, J)
 
         ts = PETSc.TS().create(comm=PETSc.COMM_WORLD)
         ts.setProblemType(ts.ProblemType.NONLINEAR)
         ts.setType(ts.Type.THETA)
         ts.setIFunction(dae.evalFunction, fp)
+        ts.setIJacobian(dae.evalJacobian, Jp)
 
         historyp = []
         tvecp = []
@@ -1262,11 +1297,12 @@ def integrate_system(psys,
 
         # fault application
         psys.fault_events[0].apply()
-        alg = ALG_petsc(psys, theta)
+        alg = ALG_petsc(psys, theta, J)
         fsp = z0p.duplicate()
         snes = PETSc.SNES()
         snes.create(PETSc.COMM_WORLD)
         snes.setFunction(alg.evalFunction, fsp)
+        snes.setJacobian(alg.evalJacobian, Jp)
         snes.setOptionsPrefix("alg_")
         snes.setFromOptions()
         snes.solve(None, z0p)
@@ -1375,6 +1411,7 @@ def integrate_system(psys,
         label = "generator at bus %d" % (bus)
         plt.plot(tvec, history[bus,:], label="uqgrid")
         plt.plot(tvecp, historyp[bus,:], label="petsc4py")
+        break
     plt.legend()
     plt.show()
 
