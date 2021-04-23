@@ -1,7 +1,7 @@
 # TEST CASE 001: Two-bus system
 
 from uqgrid.psysdef import Psystem, GenGENROU, ExcESDC1A, GovIEESGO, MotCIM5
-from uqgrid.uqgrid import integrate_system
+from uqgrid.dynamics import integrate_system
 from uqgrid.parse import load_psse, add_dyr
 from uqgrid.pflow import runpf
 

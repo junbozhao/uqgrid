@@ -1,7 +1,7 @@
 import uqgrid
 from uqgrid.parse import load_psse, add_dyr
 from uqgrid.pflow import runpf
-from uqgrid.uqgrid import integrate_system
+from uqgrid.dynamics import integrate_system
 
 import unittest
 import numpy as np

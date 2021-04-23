@@ -6,7 +6,7 @@ sys.path.append("..")
 import numpy as np
 import matplotlib.pyplot as plt
 from uqgrid.psysdef import Psystem
-from uqgrid.uqgrid import integrate_system
+from uqgrid.dynamics import integrate_system
 from uqgrid.parse import load_psse, add_dyr
 from uqgrid.pflow import runpf
 
