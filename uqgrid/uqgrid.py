@@ -1206,7 +1206,8 @@ def integrate_system(psys,
                      comp_sens=False,
                      fsolve=False,
                      ton=0.25,
-                     toff=0.4):
+                     toff=0.4,
+                     petsc=False):
     """integrate power system dynamics
 
     Args:
@@ -1245,14 +1246,32 @@ def integrate_system(psys,
 
     # Integration of D.A.E
     z = z0
-    history = np.zeros((system_size, nsteps))
 
     # Sensitivity parameters
     nparam = psys.nloads # For now, we only suport sensitivities of loads
     nmixed = int((nparam**2 - nparam)/2)
+    
+    # sensitivity variables
+    if comp_sens:
+        history_u = np.zeros((system_size, nparam, nsteps))
+        history_v = np.zeros((system_size, nparam, nsteps))
+        history_m = np.zeros((system_size, nmixed, nsteps))
+        u = np.zeros((system_size, nparam))
+        v = np.zeros((system_size, nparam))
+        m = np.zeros((system_size, nmixed))
+        Hess = preallocate_hessian(psys)
+        #initialize_sensitivities(volt, Pinj, psys, z, u, v)
+    else:
+        history_u = None
+        history_v = None
+        history_m = None
+        u = None
+        v = None
+        m = None
+        Hess = None
 
-    if petsc4py:
-        print("Convert objects to PETSc format")
+    if petsc4py and petsc:
+        if verbose: print("Convert objects to PETSc format")
         nsize = J.shape[0]
         Jp = PETSc.Mat()
         Jp.create(PETSc.COMM_WORLD)
@@ -1322,97 +1341,68 @@ def integrate_system(psys,
         ts.solve(z0p)
 
         # Cast history to numpy arrays
-        historyp = np.transpose(np.array(historyp))
-        tvecp = np.array(tvecp)
+        history = np.transpose(np.array(historyp))
+        tvec = np.array(tvecp)
 
-    # sensitivity variables
-    if comp_sens:
-        history_u = np.zeros((system_size, nparam, nsteps))
-        history_v = np.zeros((system_size, nparam, nsteps))
-        history_m = np.zeros((system_size, nmixed, nsteps))
-        u = np.zeros((system_size, nparam))
-        v = np.zeros((system_size, nparam))
-        m = np.zeros((system_size, nmixed))
-        Hess = preallocate_hessian(psys)
-        #initialize_sensitivities(volt, Pinj, psys, z, u, v)
     else:
-        history_u = None
-        history_v = None
-        history_m = None
-        u = None
-        v = None
-        m = None
-        Hess = None
-
-    tvec = np.linspace(0, nsteps*h, nsteps)
-
-    for i in range(nsteps):
-        if verbose: print("Step: %i. Time: %g (sec)" % (i, i*h))
-        z, u, v, m = integrate(z,
-                            theta,
-                            h,
-                            psys,
-                            F,
-                            J,
-                            Hess,
-                            verbose=verbose,
-                            fsolve=fsolve,
-                            uold=u,
-                            vold=v,
-                            mold=m)
-        history[:, i] = np.copy(z)
-
-        if i == step_on:
-            if verbose: print("Apply fault")
-            if len(psys.fault_events) > 0:
-                psys.fault_events[0].apply()
-            z, _, _, _ = integrate(z,
+        tvec = np.linspace(0, nsteps*h, nsteps)
+        history = np.zeros((system_size, nsteps))
+        for i in range(nsteps):
+            if verbose: print("Step: %i. Time: %g (sec)" % (i, i*h))
+            z, u, v, m = integrate(z,
                                 theta,
-                                0.0,
+                                h,
                                 psys,
                                 F,
                                 J,
                                 Hess,
                                 verbose=verbose,
-                                fsolve=True,
-                                uold=None,
-                                vold=None,
-                                mold=None)
-        if i == step_off:
-            if verbose: print("Remove fault")
-            if len(psys.fault_events) > 0:
-                psys.fault_events[0].remove()
-            z, _, _, _ = integrate(z,
-                                theta,
-                                0.0,
-                                psys,
-                                F,
-                                J,
-                                Hess,
-                                verbose=verbose,
-                                fsolve=True,
-                                uold=None,
-                                vold=None,
-                                mold=None)
+                                fsolve=fsolve,
+                                uold=u,
+                                vold=v,
+                                mold=m)
+            history[:, i] = np.copy(z)
 
-        if comp_sens:
-            history_u[:, :, i] = np.copy(u)
-            history_v[:, :, i] = np.copy(v)
-            history_m[:, :, i] = np.copy(m)
+            if i == step_on:
+                if verbose: print("Apply fault")
+                if len(psys.fault_events) > 0:
+                    psys.fault_events[0].apply()
+                z, _, _, _ = integrate(z,
+                                    theta,
+                                    0.0,
+                                    psys,
+                                    F,
+                                    J,
+                                    Hess,
+                                    verbose=verbose,
+                                    fsolve=True,
+                                    uold=None,
+                                    vold=None,
+                                    mold=None)
+            if i == step_off:
+                if verbose: print("Remove fault")
+                if len(psys.fault_events) > 0:
+                    psys.fault_events[0].remove()
+                z, _, _, _ = integrate(z,
+                                    theta,
+                                    0.0,
+                                    psys,
+                                    F,
+                                    J,
+                                    Hess,
+                                    verbose=verbose,
+                                    fsolve=True,
+                                    uold=None,
+                                    vold=None,
+                                    mold=None)
 
-    # if tend < toff we remove fault before exiting
-    if i < step_off:
-        psys.fault_events[0].remove()
+            if comp_sens:
+                history_u[:, :, i] = np.copy(u)
+                history_v[:, :, i] = np.copy(v)
+                history_m[:, :, i] = np.copy(m)
 
-    
-    import matplotlib.pyplot as plt
-    bus_idx = psys.genspeed_idx_set()
-    for bus in bus_idx:
-        label = "generator at bus %d" % (bus)
-        plt.plot(tvec, history[bus,:], label="uqgrid")
-        plt.plot(tvecp, historyp[bus,:], label="petsc4py")
-        break
-    plt.legend()
-    plt.show()
+        # if tend < toff we remove fault before exiting
+        if i < step_off:
+            psys.fault_events[0].remove()
 
     return tvec, history, history_u, history_v, history_m
