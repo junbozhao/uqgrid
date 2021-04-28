@@ -36,7 +36,7 @@ psys.set_load_parameters(pnom)
 #tvec, history, history_u, history_v, history_m = integrate_system(psys,
 #        verbose=False, comp_sens=True, dt=dt, tend=20.0, petsc=False)
 tvec2, history2, history_u, history_v, history_m = integrate_system(psys,
-        verbose=False, comp_sens=True, dt=dt, tend=20.0, petsc=True)
+        verbose=False, comp_sens=True, dt=dt, tend=5.0, petsc=True)
 
 #plt.plot(tvec, history[4,:], label="vanilla")
 plt.plot(tvec2, history2[4,:], label="petsc")

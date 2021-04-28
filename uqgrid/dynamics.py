@@ -1170,7 +1170,10 @@ if petsc4py:
             NDIFFEQ = self.psys.num_dof_dif
             xx = np.array([x[i] for i in range(start, end)])
             # Placeholder. Need to work on preallocating and obtaining J_p.
-            #P.setValuesCSR(self.J.indptr, self.J.indices, self.J.data)
+            mat_temp = csr_matrix(np.ones([len(xx), self.psys.nloads]))
+            for i in range(self.psys.nloads):
+                mat_temp[:, i] = gradient_p(self.psys, xx, self.theta, load_idx=i)
+            P.setValuesCSR(mat_temp.indptr, mat_temp.indices, mat_temp.data)
             P.assemble()
             return True # same nonzero pattern
 
@@ -1222,6 +1225,18 @@ if petsc4py:
                 cost += x[idx]
             r[0] = cost
             r.assemble()
+        
+        def evalJacobian(self, ts, t, x, A, B):
+            bus_idx = self.psys.genspeed_idx_set()
+            for idx in bus_idx:
+                A[bus_idx, 0] = 1.0
+            A.assemble()
+            return True
+        
+        def evalJacobianP(self, ts, t, x, A):
+            A[:,:] = 0.0
+            A.assemble()
+            return True
             
 
 def integrate_system(psys,
@@ -1339,9 +1354,15 @@ def integrate_system(psys,
 
         # create adjoint integrator
         if comp_sens:
+            DRDX = PETSc.Mat().createDense([nsize, 1], comm=PETSc.COMM_WORLD)
+            DRDX.setUp()
+            DRDP = PETSc.Mat().createDense([nparam,1], comm=PETSc.COMM_WORLD)
+            DRDP.setUp()
             quad = ADJ_petsc(psys, theta)
             quadts = ts.createQuadratureTS(forward=False)
             quadts.setRHSFunction(quad.evalCostIntegrand)
+            quadts.setIJacobian(quad.evalJacobian, DRDX)
+            quadts.setIJacobianP(quad.evalJacobianP, DRDP)
             v_lambda = z0p.duplicate()
             v_mu = PETSc.Vec()
             v_mu.createSeq(nparam)
