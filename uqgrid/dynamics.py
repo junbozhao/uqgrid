@@ -1164,6 +1164,15 @@ if petsc4py:
             P.assemble()
             if J != P: J.assemble()
             return True # same nonzero pattern
+        
+        def evalJacobianP(self, ts, t, x, xdot, a, P):
+            start, end = x.getOwnershipRange()
+            NDIFFEQ = self.psys.num_dof_dif
+            xx = np.array([x[i] for i in range(start, end)])
+            # Placeholder. Need to work on preallocating and obtaining J_p.
+            #P.setValuesCSR(self.J.indptr, self.J.indices, self.J.data)
+            P.assemble()
+            return True # same nonzero pattern
 
     class ALG_petsc(object):
         n = 1
@@ -1197,6 +1206,23 @@ if petsc4py:
 
             if J != P: J.assemble()
             return True
+
+    class ADJ_petsc(object):
+        n = 1
+        comm = PETSc.COMM_SELF
+        def __init__(self, psys, theta):
+            self.psys = psys
+            self.theta = theta
+        
+        def evalCostIntegrand(self, ts, t, x, r):
+            """ We will just compute the integral of the speed deviation for each generator """
+            bus_idx = self.psys.genspeed_idx_set()
+            cost = 0.0
+            for idx in bus_idx:
+                cost += x[idx]
+            r[0] = cost
+            r.assemble()
+            
 
 def integrate_system(psys,
                      tend=10.0,
@@ -1282,6 +1308,17 @@ def integrate_system(psys,
         Jp.assemblyBegin()
         Jp.assemblyEnd()
 
+        Jtheta = PETSc.Mat()
+        Jtheta.create(PETSc.COMM_WORLD)
+        Jtheta.setSizes([nsize, nparam])
+        Jtheta.setType('seqaij')
+        # as a placeholder, we make this matrix dense
+        mat_temp = csr_matrix(np.ones([nsize, nparam]))
+        csr = [mat_temp.indptr, mat_temp.indices, mat_temp.data]
+        Jtheta.setPreallocationCSR(csr)
+        Jtheta.assemblyBegin()
+        Jtheta.assemblyEnd()
+
         z0p = PETSc.Vec()
         z0p.createSeq(nsize)
         z0p.setArray(z0)
@@ -1298,6 +1335,20 @@ def integrate_system(psys,
         ts.setType(ts.Type.THETA)
         ts.setIFunction(dae.evalFunction, fp)
         ts.setIJacobian(dae.evalJacobian, Jp)
+        ts.setIJacobianP(dae.evalJacobianP, Jtheta)
+
+        # create adjoint integrator
+        if comp_sens:
+            quad = ADJ_petsc(psys, theta)
+            quadts = ts.createQuadratureTS(forward=False)
+            quadts.setRHSFunction(quad.evalCostIntegrand)
+            v_lambda = z0p.duplicate()
+            v_mu = PETSc.Vec()
+            v_mu.createSeq(nparam)
+            v_mu.assemblyBegin()
+            v_mu.assemblyEnd()
+            ts.setCostGradients(v_lambda, v_mu)
+            ts.setSaveTrajectory()
 
         historyp = []
         tvecp = []
@@ -1306,7 +1357,6 @@ def integrate_system(psys,
             historyp.append(xx)
             tvecp.append(t)
         ts.setMonitor(monitor)
-        
         ts.setTime(0.0)
         ts.setTimeStep(dt)
         ts.setMaxTime(ton)
@@ -1340,9 +1390,15 @@ def integrate_system(psys,
         ts.setMaxTime(tend)
         ts.solve(z0p)
 
+        # adjoint computation
+        if comp_sens:
+            ts.adjointSolve()
+
         # Cast history to numpy arrays
         history = np.transpose(np.array(historyp))
         tvec = np.array(tvecp)
+
+        exit()
 
     else:
         tvec = np.linspace(0, nsteps*h, nsteps)
