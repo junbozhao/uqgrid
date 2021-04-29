@@ -31,14 +31,20 @@ pmax = np.ones(psys.nloads)
 pmin = np.zeros(psys.nloads)
 
 pnom = pmin + 0.5*(pmax - pmin)
+eps = 1e-6
 psys.set_load_parameters(pnom)
+log = {}
+print("Forward simulation with p")
+tvec, history, history_u, history_v, history_m = integrate_system(psys,
+        verbose=False, comp_sens=True, dt=dt, tend=5.0, petsc=True, log=log)
 
-#tvec, history, history_u, history_v, history_m = integrate_system(psys,
-#        verbose=False, comp_sens=True, dt=dt, tend=20.0, petsc=False)
-tvec2, history2, history_u, history_v, history_m = integrate_system(psys,
-        verbose=False, comp_sens=True, dt=dt, tend=5.0, petsc=True)
+psys.set_load_parameters(pnom + eps)
+log2 = {}
+print("Forward simulation with p + eps")
+tvec, history, history_u, history_v, history_m = integrate_system(psys,
+        verbose=False, comp_sens=True, dt=dt, tend=5.0, petsc=True, log=log2)
 
-#plt.plot(tvec, history[4,:], label="vanilla")
-plt.plot(tvec2, history2[4,:], label="petsc")
-plt.legend()
-plt.show()
+print("FD Gradient")
+print((log2["cost"] - log["cost"])/eps)
+
+

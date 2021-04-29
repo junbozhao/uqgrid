@@ -1222,14 +1222,14 @@ if petsc4py:
             bus_idx = self.psys.genspeed_idx_set()
             cost = 0.0
             for idx in bus_idx:
-                cost += x[idx]
+                cost += x[idx]*x[idx]
             r[0] = cost
             r.assemble()
         
         def evalJacobian(self, ts, t, x, A, B):
             bus_idx = self.psys.genspeed_idx_set()
             for idx in bus_idx:
-                A[bus_idx, 0] = 1.0
+                A[bus_idx, 0] = 2*x[idx]
             A.assemble()
             return True
         
@@ -1248,7 +1248,8 @@ def integrate_system(psys,
                      fsolve=False,
                      ton=0.25,
                      toff=0.4,
-                     petsc=False):
+                     petsc=False,
+                     log=None):
     """integrate power system dynamics
 
     Args:
@@ -1361,8 +1362,8 @@ def integrate_system(psys,
             quad = ADJ_petsc(psys, theta)
             quadts = ts.createQuadratureTS(forward=False)
             quadts.setRHSFunction(quad.evalCostIntegrand)
-            quadts.setIJacobian(quad.evalJacobian, DRDX)
-            quadts.setIJacobianP(quad.evalJacobianP, DRDP)
+            quadts.setRHSJacobian(quad.evalJacobian, DRDX)
+            quadts.setRHSJacobianP(quad.evalJacobianP, DRDP)
             v_lambda = z0p.duplicate()
             v_mu = PETSc.Vec()
             v_mu.createSeq(nparam)
@@ -1414,12 +1415,22 @@ def integrate_system(psys,
         # adjoint computation
         if comp_sens:
             ts.adjointSolve()
+            print("v_mu")
+            v_mu.view()
+            print("v_lambda")
+            v_lambda.view()
+            print("cost")
+            cst = ts.getCostIntegral()
+            cst.view()
+            
+            if log is not None:
+                log["cost"] = np.array(cst[0])
+
+
 
         # Cast history to numpy arrays
         history = np.transpose(np.array(historyp))
         tvec = np.array(tvecp)
-
-        exit()
 
     else:
         tvec = np.linspace(0, nsteps*h, nsteps)
