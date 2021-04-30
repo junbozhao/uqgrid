@@ -726,7 +726,7 @@ def jacobian_beuler(J, NDIFFEQ, h):
 def jacobian_implicit(J, NDIFFEQ, a):
     # Converts the Jacobian of the r.h.s into:
     # J = [a*I-df_dx, -df_dy
-    #     dg_dx, dg_dy]
+    #     -dg_dx, -dg_dy]
 
     for i in range(J.shape[0]):
         csr_mult_row(J.data, J.indptr, J.indices, i, -1)
@@ -1173,7 +1173,7 @@ if petsc4py:
             mat_temp = csr_matrix(np.ones([len(xx), self.psys.nloads]))
             for i in range(self.psys.nloads):
                 mat_temp[:, i] = gradient_p(self.psys, xx, self.theta, load_idx=i)
-            P.setValuesCSR(mat_temp.indptr, mat_temp.indices, mat_temp.data)
+            P.setValuesCSR(mat_temp.indptr, mat_temp.indices, -mat_temp.data)
             P.assemble()
             return True # same nonzero pattern
 
@@ -1229,7 +1229,7 @@ if petsc4py:
         def evalJacobian(self, ts, t, x, A, B):
             bus_idx = self.psys.genspeed_idx_set()
             for idx in bus_idx:
-                A[bus_idx, 0] = 2*x[idx]
+                A[idx, 0] = 2*x[idx]
             A.assemble()
             return True
         
@@ -1285,7 +1285,6 @@ def integrate_system(psys,
     # hacky fault event time step calculation
     step_on = int(ton/h)
     step_off = int(toff/h)
-
     # Integration of D.A.E
     z = z0
 
@@ -1385,32 +1384,33 @@ def integrate_system(psys,
         ts.setExactFinalTime(PETSc.TS.ExactFinalTime.INTERPOLATE)
         ts.setFromOptions()
         ts.solve(z0p)
+        
+        if ton < tend:
+            # fault application
+            psys.fault_events[0].apply()
+            alg = ALG_petsc(psys, theta, J)
+            fsp = z0p.duplicate()
+            snes = PETSc.SNES()
+            snes.create(PETSc.COMM_WORLD)
+            snes.setFunction(alg.evalFunction, fsp)
+            snes.setJacobian(alg.evalJacobian, Jp)
+            snes.setOptionsPrefix("alg_")
+            snes.setFromOptions()
+            snes.solve(None, z0p)
 
-        # fault application
-        psys.fault_events[0].apply()
-        alg = ALG_petsc(psys, theta, J)
-        fsp = z0p.duplicate()
-        snes = PETSc.SNES()
-        snes.create(PETSc.COMM_WORLD)
-        snes.setFunction(alg.evalFunction, fsp)
-        snes.setJacobian(alg.evalJacobian, Jp)
-        snes.setOptionsPrefix("alg_")
-        snes.setFromOptions()
-        snes.solve(None, z0p)
+            # disturbance time
+            ts.setTime(ton)
+            ts.setMaxTime(toff)
+            ts.solve(z0p)
 
-        # disturbance time
-        ts.setTime(ton)
-        ts.setMaxTime(toff)
-        ts.solve(z0p)
+            # fault removal
+            psys.fault_events[0].remove()
+            snes.solve(None, z0p)
 
-        # fault removal
-        psys.fault_events[0].remove()
-        snes.solve(None, z0p)
-
-        # post disturbance time
-        ts.setTime(toff)
-        ts.setMaxTime(tend)
-        ts.solve(z0p)
+            # post disturbance time
+            ts.setTime(toff)
+            ts.setMaxTime(tend)
+            ts.solve(z0p)
 
         # adjoint computation
         if comp_sens:
