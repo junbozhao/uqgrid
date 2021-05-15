@@ -74,7 +74,8 @@ def load_psse(raw_filename):
         bus = psse_to_int[case.loads[i].busn]
         if case.loads[i].status == 1:
             # Considering only constant-power loads
-            psys.add_load(bus, case.loads[i].name, case.loads[i].pl, -case.loads[i].ql)
+            #psys.add_load(bus, case.loads[i].name, case.loads[i].pl, -case.loads[i].ql)
+            psys.add_load(bus, case.loads[i].name, case.loads[i].pl + case.loads[i].yp + case.loads[i].ip, -case.loads[i].ql)
     
     # adjust alpha for buses where there are multiple loads.
     # Example, in bus 2 there are two loads:

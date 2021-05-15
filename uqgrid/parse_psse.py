@@ -119,25 +119,25 @@ class BranchRaw(object):
     def __init__(self, line):
 
         line = line.strip('\n').split(',')
-
         self.fbus   = int(line[0])
         self.tbus   = int(line[1])
         self.ckt    = line[2]
         self.r      = float(line[3])
         self.x      = float(line[4])
         self.b      = float(line[5])
-        self.rateA  = float(line[6])
-        self.rateB  = float(line[7])
-        self.rateC  = float(line[8])
-        self.gi     = float(line[9])
-        self.bi     = float(line[10])
-        self.gj     = float(line[11])
-        self.bj     = float(line[12])
-        self.status = int(line[13])
-        self.MET    = int(line[14])
-        self.lenght = float(line[15])
-        self.o1     = int(line[16])
-        self.f1     = float(line[16])
+        
+        #self.rateA  = float(line[6])
+        #self.rateB  = float(line[7])
+        #self.rateC  = float(line[8])
+        #self.gi     = float(line[9])
+        #self.bi     = float(line[10])
+        #self.gj     = float(line[11])
+        #self.bj     = float(line[12])
+        #self.status = int(line[13])
+        #self.MET    = int(line[14])
+        #self.lenght = float(line[15])
+        #self.o1     = int(line[16])
+        #self.f1     = float(line[16])
 
 
     def toraw(self):
@@ -181,14 +181,14 @@ class TransformerRaw(object):
         self.rateA   = float(line[3])
         self.rateB   = float(line[4])
         self.rateC   = float(line[5])
-        self.COD1    = int(line[6])
-        self.CONT1   = int(line[7])
+        self.COD1    = 1#int(line[6])
+        self.CONT1   = 1#int(line[7])
         self.RMA1    = float(line[8])
         self.RMIT    = float(line[9])
         self.VMA1    = float(line[10])
         self.VMI1    = float(line[11])
-        self.NTP1    = int(line[12])
-        self.TAB1    = int(line[13])
+        self.NTP1    = 0# int(line[12])
+        self.TAB1    = 0 #int(line[13])
         self.CR1     = float(line[14])
         self.CX1     = float(line[15])
         self.CNXA1   = float(line[16])
@@ -246,7 +246,7 @@ class PsystemRaw(object):
         
         while(True):
             line = f.readline()
-            if "0 / END OF GENERATOR DATA, BEGIN BRANCH DATA" in line: break
+            if "0 / END OF GENERATOR DATA" in line: break
             if not line: break
             else:
                 self.gens.append(GenRaw(line))
@@ -255,7 +255,7 @@ class PsystemRaw(object):
         
         while(True):
             line = f.readline()
-            if "0 / END OF BRANCH DATA, BEGIN TRANSFORMER DATA" in line: break
+            if "0 / END OF BRANCH DATA" in line: break
             if not line: break
             else:
                 self.branches.append(BranchRaw(line))
@@ -264,7 +264,7 @@ class PsystemRaw(object):
         
         while(True):
             line = f.readline()
-            if "0 / END OF TRANSFORMER DATA, BEGIN AREA DATA" in line: break
+            if "0 / END OF TRANSFORMER DATA" in line: break
             if not line: break
             else:
                 line2 = f.readline()
